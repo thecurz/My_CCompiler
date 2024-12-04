@@ -1,4 +1,5 @@
 typedef enum {
+  INVALID_TOKEN = -1,
   IDENTIFIER = 1,
   CONSTANT = 2,
   INT_KW = 3,

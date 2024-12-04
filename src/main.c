@@ -8,19 +8,16 @@
 #include <string.h>
 
 Token token_definitions[] = {
-    {IDENTIFIER, "[a-zA-Z_][a-zA-Z0-9_]*"}, // Match valid identifiers
-    {CONSTANT, "[0-9]+"},                   // Match numeric constants
-    {INT_KW,
-     "(^|[^a-zA-Z0-9_])int([^a-zA-Z0-9_]|$)"}, // Match "int" as a whole word
-    {VOID_KW,
-     "(^|[^a-zA-Z0-9_])void([^a-zA-Z0-9_]|$)"}, // Match "void" as a whole word
-    {RET_KW, "(^|[^a-zA-Z0-9_])return([^a-zA-Z0-9_]|$)"}, // Match "return" as a
-                                                          // whole word
-    {OPEN_PAREN, "("},                                    // Match literal '('
-    {CLOSE_PAREN, ")"},                                   // Match literal ')'
-    {OPEN_BRACE, "{"},                                    // Match literal '{'
-    {CLOSE_BRACE, "}"},                                   // Match literal '}'
-    {SEMICOLON, ";"},                                     // Match literal ';'
+    {IDENTIFIER, "[a-zA-Z_][a-zA-Z0-9_]*"},
+    {CONSTANT, "[0-9]+"},
+    {INT_KW, "(^|[^a-zA-Z0-9_])int([^a-zA-Z0-9_]|$)"},
+    {VOID_KW, "(^|[^a-zA-Z0-9_])void([^a-zA-Z0-9_]|$)"},
+    {RET_KW, "(^|[^a-zA-Z0-9_])return([^a-zA-Z0-9_]|$)"},
+    {OPEN_PAREN, "("},
+    {CLOSE_PAREN, ")"},
+    {OPEN_BRACE, "{"},
+    {CLOSE_BRACE, "}"},
+    {SEMICOLON, ";"},
 };
 
 #define TOKEN_DEFINITIONS_COUNT                                                \
@@ -40,6 +37,30 @@ TokenInstance *create_token_instance(TokenName token_name, const char *value) {
   memcpy(instance, &(TokenInstance){.token_name = token_name, .value = value},
          sizeof(TokenInstance));
   return instance;
+}
+
+TokenName match_token(const char *buffer_ptr, regmatch_t *match) {
+  TokenName token_name;
+  // TODO: use a single regex to match all tokens
+  for (int i = 0; i < TOKEN_DEFINITIONS_COUNT; ++i) {
+    regex_t compiled_pattern;
+    if (regcomp(&compiled_pattern, token_definitions[i].regex, 0) != 0) {
+      fprintf(stderr, "Failed to compile regex: %s\n",
+              token_definitions[i].regex);
+      return INVALID_TOKEN;
+    }
+    regmatch_t match_arr[1];
+    if (regexec(&compiled_pattern, buffer_ptr, 1, match_arr, 0) == 0 &&
+        match_arr[0].rm_so < match->rm_so) {
+      *match = match_arr[0];
+      token_name = token_definitions[i].token_name;
+    }
+  }
+  if (match->rm_so == INT_MAX) {
+    fprintf(stderr, "Unrecognized token");
+    return INVALID_TOKEN;
+  }
+  return token_name;
 }
 
 int32_t main(int32_t argc, char *argv[]) {
@@ -72,34 +93,20 @@ int32_t main(int32_t argc, char *argv[]) {
       if (*buffer_ptr == '\0') {
         break;
       }
-      TokenName token_name;
       match.rm_so = INT_MAX;
       match.rm_eo = INT_MAX;
 
-      for (int i = 0; i < TOKEN_DEFINITIONS_COUNT; ++i) {
-        regex_t compiled_pattern;
-        if (regcomp(&compiled_pattern, token_definitions[i].regex, 0) != 0) {
-          fprintf(stderr, "Failed to compile regex: %s\n",
-                  token_definitions[i].regex);
-          return 1;
-        }
-        regmatch_t match_arr[1];
-        if (regexec(&compiled_pattern, buffer_ptr, 1, match_arr, 0) == 0 &&
-            match_arr[0].rm_so < match.rm_so) {
-          match = match_arr[0];
-          token_name = token_definitions[i].token_name;
-        }
-      }
-      if (match.rm_so == INT_MAX) {
-        fprintf(stderr, "Unrecognized token, last token: %s\n",
-                token_instances[token_instances_idx - 1]->value);
+      TokenName token_name = match_token(buffer_ptr, &match);
+      if (token_name == -1)
         return 1;
-      }
+
       int token_idx = match.rm_so;
       int token_byte_len = match.rm_eo - match.rm_so;
       char *value = malloc(token_byte_len + 1);
+
       strncpy(value, buffer_ptr, token_byte_len);
       value[token_byte_len] = '\0';
+
       token_instances[token_instances_idx++] =
           create_token_instance(token_name, value);
       buffer_ptr += token_byte_len;

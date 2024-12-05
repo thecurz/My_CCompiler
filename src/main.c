@@ -1,3 +1,4 @@
+#define _GNU_SOURCE
 #include "lexer/lexer.h"
 #include "lexer/token.h"
 #include <ctype.h>
